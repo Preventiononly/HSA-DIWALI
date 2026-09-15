@@ -239,8 +239,9 @@ footer{text-align:center;padding:40px 0 60px;color:var(--cream-dim);font-size:13
     <div class="facts">
       <div class="fact"><b>Sat, Nov 7, 2026</b><span>Festival evening</span></div>
       <div class="fact"><b>6:00 – 9:00 PM</b><span>Evening celebration</span></div>
-      <div class="fact"><b>Hudson City Hall</b><span>Venue</span></div>
+      <a class="fact" href="https://share.google/WqHfxgOccS3P1PpMX" target="_blank" rel="noopener" style="text-decoration:none"><b>Hudson City Hall</b><span>1140 Terex Rd · Directions ↗</span></a>
     </div>
+    <p class="welcome" style="margin-top:14px;font-size:15px">📍 <b>Hudson City Hall</b> · 1140 Terex Rd, Hudson, OH 44236 — <a href="https://share.google/WqHfxgOccS3P1PpMX" target="_blank" rel="noopener" class="gold">Open in Google Maps ↗</a><br>🚫 Please note: <b>no alcohol is permitted</b> at this venue.</p>
     <a class="cta" href="#book" id="hero-cta">Book your tickets</a>
     <div class="diyas">
       <div class="diya"><div class="glow"></div><div class="flame"></div><div class="bowl"></div></div>
@@ -307,7 +308,6 @@ footer{text-align:center;padding:40px 0 60px;color:var(--cream-dim);font-size:13
     <div id="ticketList"></div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:8px">
       <button class="ghost-btn" onclick="window.print()">Print / Save as PDF</button>
-      <button class="ghost-btn" id="emailBtn">Email my tickets</button>
       <a class="cta" href="#payment" style="margin-top:0">Continue to payment ↓</a>
     </div>
   </div>
@@ -399,7 +399,8 @@ footer{text-align:center;padding:40px 0 60px;color:var(--cream-dim);font-size:13
       </div>
 
       <div class="pane show" id="pane-bookings">
-        <p class="muted" style="margin-top:0">Confirm a Zelle/Venmo payment, then <b class="gold">Validate</b> to activate that booking's tickets. Validated tickets scan as valid at the door.</p>
+        <p class="muted" style="margin-top:0">Confirm a Zelle/Venmo payment, then <b class="gold">Validate</b> to activate that booking's tickets. At the door you can scan a QR <b>or</b> just search the guest's name below — anyone marked <b class="gold">✅ Validated</b> is paid and good to walk in.</p>
+        <input type="text" id="bookingSearch" placeholder="🔍 Search a guest's name, email, or booking ID" oninput="paintRows()" style="margin-bottom:12px">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
           <span class="muted" id="bookingStats" style="font-size:13px"></span>
           <button class="ghost-btn" onclick="exportBookings()">⬇ Export guest list (Excel)</button>
@@ -424,6 +425,7 @@ const CFG = {
   organizerEmails: ["saneka17@yahoo.com","nikitahegde@gmail.com"],
   prices: { early:40, regular:45 },                 // per person, ages 6 & over
   earlyBirdCutoff: new Date("2026-10-29T23:59:59"), // early-bird valid THROUGH this date
+  salesCloseDate: new Date("2026-11-04T23:55:00-05:00"),  // ticket sales close AFTER this moment (Hudson/Eastern time)
   eventDate: "Sat, Nov 7, 2026",
   eventTime: "6:00 – 9:00 PM",
   zelleUrl: "https://enroll.zellepay.com/qr-codes?data=eyJuYW1lIjoiU0FORUtBIiwiYWN0aW9uIjoicGF5bWVudCIsInRva2VuIjoiODYwNjgwNzMyNSJ9",
@@ -451,6 +453,7 @@ if(FB_READY){
 }
 
 const now = new Date();
+const salesClosed = now > CFG.salesCloseDate;
 const isEarly = now <= CFG.earlyBirdCutoff;
 const PRICE = isEarly ? CFG.prices.early : CFG.prices.regular;
 const state = { guests:0 };
@@ -559,29 +562,6 @@ function renderTickets(b){
     new QRCode(document.getElementById('qr_'+t.tid),{text:t.tid,width:118,height:118,
       colorDark:'#1a0d2e',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});
   });
-  // email button
-  document.getElementById('emailBtn').onclick=()=>{
-    const to=[b.email,...CFG.organizerEmails].join(',');
-    const subj=`Diwali 2026 tickets — ${b.name} (${b.id})`;
-    const lines=[
-      `Hello ${b.name},`,'',
-      `Thank you for booking Diwali 2026 with the Hudson South Asians Club!`,'',
-      `Booking: ${b.id}`,
-      `Guests (ages 6 & over): ${b.guests}`,
-      `Amount due: ${money(b.total)}`,'',
-      `Your ticket IDs:`,
-      ...b.tickets.map(t=>`  • ${t.tid}`),'',
-      `Next step: pay ${money(b.total)} (Friends & Family) using any one of:`,
-      `  • Zelle — Saneka Chakravarty, phone ending ${CFG.venmoSaneka.last4}`,
-      `  • Venmo — Saneka Chakravarty (@${CFG.venmoSaneka.handle}), phone ending ${CFG.venmoSaneka.last4}`,
-      `  • Venmo — Nikita Hegde (@${CFG.venmoNikita.handle}), phone ending ${CFG.venmoNikita.last4}`,
-      `In the note, include: ${b.name}; ${b.email}; ${b.guests} guests; ${b.id}.`,'',
-      `Little ones 5 & under are free — no ticket needed.`,'',
-      `Please keep your QR codes handy (screenshot or print the page) — you'll scan in at City Hall.`,'',
-      `Warm wishes,`,`Hudson South Asians Club`
-    ];
-    window.location.href=`mailto:${to}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(lines.join('\n'))}`;
-  };
 }
 
 function renderPayment(b){
@@ -665,10 +645,22 @@ function renderBookings(all){
     const pending=currentBookings.length-paidB.length;
     stats.textContent=`${currentBookings.length} bookings · ${guestsPaid} guests paid · $${collected} collected · ${pending} pending`;
   }
+  paintRows();
+}
+function paintRows(){
   const wrap=document.getElementById('bookingList');
-  if(!all.length){ wrap.innerHTML='<p class="muted">No bookings yet.</p>'; return; }
+  if(!wrap) return;
+  const q=(document.getElementById('bookingSearch')?.value||'').trim().toLowerCase();
+  if(!currentBookings.length){ wrap.innerHTML='<p class="muted">No bookings yet.</p>'; return; }
+  const list=q ? currentBookings.filter(b=>
+      (b.name||'').toLowerCase().includes(q) ||
+      (b.email||'').toLowerCase().includes(q) ||
+      (b.phone||'').toLowerCase().includes(q) ||
+      (b.id||'').toLowerCase().includes(q)
+    ) : currentBookings;
+  if(!list.length){ wrap.innerHTML='<p class="muted">No guest matches that search.</p>'; return; }
   wrap.innerHTML='';
-  all.forEach(b=>{
+  list.forEach(b=>{
     const row=document.createElement('div'); row.className='brow'+(b.paid?' paid':''); row.id='row_'+b.id;
     row.innerHTML=`<div class="info">
         <b>${b.name}</b> <span class="pill dn">${money(b.total)}</span>
@@ -784,8 +776,29 @@ async function onScan(text){
 }
 function resetScan(){ document.getElementById('scanResult').style.display='none'; startScanner(); }
 
+/* ---------- sales window ---------- */
+function applySalesStatus(){
+  if(!salesClosed) return;
+  const book=document.getElementById('book');
+  if(book){
+    const grid=book.querySelector('.book-grid'); if(grid) grid.remove();
+    const banner=document.getElementById('priceBanner'); if(banner) banner.innerHTML='';
+    const head=book.querySelector('.section-head');
+    if(head){
+      const h=head.querySelector('h2'); if(h) h.textContent='Ticket sales are closed';
+      const p=document.createElement('p'); p.className='welcome'; p.style.marginTop='10px';
+      p.innerHTML=`Online ticket sales closed on <b>Nov 4, 2026</b>. If you still need tickets, please reach out to the organizers directly. We can't wait to celebrate with you! 🪔`;
+      head.appendChild(p);
+    }
+  }
+  const cta=document.getElementById('hero-cta');
+  if(cta){ cta.textContent='Sales closed'; cta.style.pointerEvents='none'; cta.style.opacity='.55'; }
+}
+
 /* ---------- init ---------- */
-initPrices(); renderSummary(); checkDeepLink();
+applySalesStatus();
+if(!salesClosed){ initPrices(); renderSummary(); }
+checkDeepLink();
 </script>
 </body>
 </html>
