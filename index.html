@@ -150,6 +150,8 @@ input:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(244,185,62,.15)}
 .ghost-btn{background:transparent;border:1px solid var(--gold);color:var(--gold);
   border-radius:12px;padding:12px 18px;font-family:"Mukta";font-weight:600;font-size:15px;cursor:pointer;transition:.15s}
 .ghost-btn:hover{background:var(--gold);color:#3a1400}
+.del-btn{width:100%;background:transparent;border:1px solid #d9556f;color:#d9556f;border-radius:10px;padding:8px 14px;font-size:13px;cursor:pointer;font-family:inherit}
+.del-btn:hover{background:#d9556f;color:#fff}
 .err{color:var(--bad);font-size:14px;margin-top:10px;min-height:1px}
 
 /* tickets */
@@ -492,6 +494,12 @@ const DB = {
     for(const k of keys){ const id=k.replace('booking:',''); const b=await this.get(id); if(b) out.push(b); }
     out.sort((a,b)=>b.createdAt-a.createdAt);
     return out;
+  },
+  async del(id){
+    if(db){ try{ await db.collection('bookings').doc(id).delete(); return; }catch(e){ console.error(e); throw e; } }
+    try{ if(window.storage){ await window.storage.delete('booking:'+id, true); return; } }catch(e){}
+    try{ localStorage.removeItem('booking:'+id); }catch(e){}
+    delete mem['booking:'+id];
   }
 };
 
@@ -750,9 +758,10 @@ function paintRows(){
         <small>${b.id} · ${b.guests} guest${b.guests===1?'':'s'} · ${b.email} · ${b.phone}</small>
         <small>${b.paid?'✅ Validated — tickets active':'Awaiting payment confirmation'}</small>
       </div>
-      <div>${b.paid
-        ? `<button class="ghost-btn" onclick="setPaid('${b.id}',false)">Undo</button>`
-        : `<button class="full-btn" style="margin:0;padding:10px 18px" onclick="setPaid('${b.id}',true)">Validate</button>`}
+      <div style="display:flex;flex-direction:column;gap:8px;min-width:130px">${b.paid
+        ? `<button class="ghost-btn" style="margin:0" onclick="setPaid('${b.id}',false)">Undo</button>`
+        : `<button class="full-btn" style="margin:0;padding:10px 18px" onclick="setPaid('${b.id}',true)">Validate</button>
+           <button class="del-btn" onclick="deleteBooking('${b.id}')">Delete</button>`}
       </div>`;
     wrap.appendChild(row);
   });
@@ -761,6 +770,15 @@ async function setPaid(id,val){
   const b=await DB.get(id); if(!b) return;
   b.paid=val; b.tickets.forEach(t=>t.valid=val);
   await DB.set(id,b);
+  if(!db) renderBookings(await DB.all()); // live snapshot auto-refreshes when db is on
+}
+async function deleteBooking(id){
+  const b=await DB.get(id); if(!b) return;
+  if(b.paid){ alert('This booking is validated (paid). Un-validate it first if you really need to remove it.'); return; }
+  if(!confirm(`Delete unpaid booking ${id} for ${b.name}?\n\nThis permanently removes it and cannot be undone.`)) return;
+  try{
+    await DB.del(id);
+  }catch(e){ alert('Could not delete — please try again.'); return; }
   if(!db) renderBookings(await DB.all()); // live snapshot auto-refreshes when db is on
 }
 
