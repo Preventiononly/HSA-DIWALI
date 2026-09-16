@@ -231,6 +231,10 @@ footer{text-align:center;padding:40px 0 60px;color:var(--cream-dim);font-size:13
 <!-- HERO -->
 <header class="hero">
   <div class="wrap">
+    <div id="welcomeBack" class="hide" style="background:rgba(184,134,11,.12);border:1px solid var(--gold);border-radius:14px;padding:14px 16px;margin-bottom:22px;text-align:center">
+      <b class="gold">Welcome back<span id="wbName"></span>!</b> Your tickets are saved on this device.
+      <button class="ghost-btn" style="margin-top:10px" onclick="restoreTickets()">View my tickets</button>
+    </div>
     <div class="eyebrow">Hudson South Asians Club presents</div>
     <h1>Diwali<span class="year">2026</span></h1>
     <p class="welcome">A very warm welcome to our Festival of Lights. Join our community for an evening of
@@ -305,9 +309,13 @@ footer{text-align:center;padding:40px 0 60px;color:var(--cream-dim);font-size:13
       <div class="divider"></div>
       <p>Booking <b class="gold" id="bkId"></b> · save or print these, then complete payment below to activate them.</p>
     </div>
+    <div style="background:rgba(163,21,95,.12);border:1px solid #a3155f;border-radius:14px;padding:16px;margin:6px auto 18px;max-width:560px;text-align:center">
+      <div style="font-family:'Rozha One';font-size:22px">Booking <b class="gold" id="bkIdBig"></b></div>
+      <p style="margin:.5em 0 0;font-size:14.5px">📱 <b>Save your tickets now</b> so you don't lose them — tap <b>Print / Save as PDF</b> below, or screenshot each QR code. You can also reopen this site on this same phone anytime to view them again.</p>
+    </div>
     <div id="ticketList"></div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:8px">
-      <button class="ghost-btn" onclick="window.print()">Print / Save as PDF</button>
+      <button class="ghost-btn" onclick="printTickets()">Print / Save as PDF</button>
       <a class="cta" href="#payment" style="margin-top:0">Continue to payment ↓</a>
     </div>
   </div>
@@ -538,6 +546,7 @@ async function createBooking(){
   currentBooking={id,name,email,phone,guests:state.guests,price:PRICE,phase:isEarly?'early':'regular',total,
     paid:false,tickets,createdAt:Date.now()};
   await DB.set(id,currentBooking);
+  try{ localStorage.setItem('hsac:last', JSON.stringify(currentBooking)); }catch(e){}
   renderTickets(currentBooking);
   renderPayment(currentBooking);
   document.getElementById('tickets').classList.remove('hide');
@@ -545,8 +554,29 @@ async function createBooking(){
   document.getElementById('tickets').scrollIntoView({behavior:'smooth'});
 }
 
+/* ---------- same-device ticket restore ---------- */
+function loadLast(){ try{ const r=localStorage.getItem('hsac:last'); return r?JSON.parse(r):null; }catch(e){ return null; } }
+function restoreTickets(){
+  const b=loadLast(); if(!b) return;
+  currentBooking=b;
+  renderTickets(b);
+  renderPayment(b);
+  document.getElementById('tickets').classList.remove('hide');
+  document.getElementById('payment').classList.remove('hide');
+  document.getElementById('tickets').scrollIntoView({behavior:'smooth'});
+}
+function showWelcomeBack(){
+  const b=loadLast(); if(!b) return;
+  const wb=document.getElementById('welcomeBack'); if(!wb) return;
+  const nm=document.getElementById('wbName');
+  if(nm && b.name){ nm.textContent=', '+b.name.split(' ')[0]; }
+  wb.classList.remove('hide');
+}
+
 function renderTickets(b){
+  lastBooking=b;
   document.getElementById('bkId').textContent=b.id;
+  const big=document.getElementById('bkIdBig'); if(big) big.textContent=b.id;
   const list=document.getElementById('ticketList'); list.innerHTML='';
   b.tickets.forEach((t,i)=>{
     const el=document.createElement('div'); el.className='ticket';
@@ -562,6 +592,59 @@ function renderTickets(b){
     new QRCode(document.getElementById('qr_'+t.tid),{text:t.tid,width:118,height:118,
       colorDark:'#1a0d2e',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});
   });
+}
+
+let lastBooking=null;
+function qrDataUrl(tid){
+  const box=document.getElementById('qr_'+tid);
+  if(!box) return '';
+  const c=box.querySelector('canvas');
+  if(c){ try{ return c.toDataURL('image/png'); }catch(e){} }
+  const im=box.querySelector('img');
+  return im?im.src:'';
+}
+function printTickets(){
+  if(!lastBooking||!lastBooking.tickets||!lastBooking.tickets.length){ alert('Please book your tickets first.'); return; }
+  const b=lastBooking;
+  const cards=b.tickets.map((t,i)=>`
+    <div class="tk">
+      <div class="tk-info">
+        <div class="tag">Admission · Ages 6 &amp; over</div>
+        <h2>Diwali 2026</h2>
+        <div class="ev">Hudson City Hall · ${CFG.eventDate} · ${CFG.eventTime}</div>
+        <div class="ev">1140 Terex Rd, Hudson, OH 44236</div>
+        <div class="nm">${b.name}</div>
+        <div class="ev">Ticket ${i+1} of ${b.tickets.length} · ${money(b.price)} · Booking ${b.id}</div>
+      </div>
+      <div class="tk-qr"><img src="${qrDataUrl(t.tid)}" alt="Ticket QR ${t.tid}"><div class="tid">${t.tid}</div></div>
+    </div>`).join('');
+  const doc=`<!doctype html><html><head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Diwali 2026 Tickets — ${b.name}</title>
+    <style>
+      *{box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;margin:0;padding:18px;color:#1a0d2e;background:#fff}
+      .head{text-align:center;margin-bottom:16px}.head h1{font-size:19px;margin:0 0 4px}.head p{margin:0;color:#666;font-size:12.5px}
+      .tk{display:flex;gap:14px;align-items:center;border:1.5px solid #3a1b57;border-radius:14px;padding:14px;margin:0 auto 14px;max-width:520px;page-break-inside:avoid}
+      .tk-info{flex:1}.tk h2{margin:2px 0;font-size:20px;color:#b8860b}
+      .tag{display:inline-block;font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:#a3155f;font-weight:700}
+      .ev{color:#555;font-size:12.5px;margin-top:2px}.nm{margin-top:8px;font-weight:600;font-size:15px}
+      .tk-qr{text-align:center}.tk-qr img{width:118px;height:118px;display:block}
+      .tid{font-size:11px;color:#555;margin-top:4px;font-family:monospace}
+      .note{max-width:520px;margin:14px auto 0;font-size:12.5px;color:#666;text-align:center}
+      .btn{display:block;margin:18px auto;padding:12px 22px;background:#b8860b;color:#fff;border:none;border-radius:10px;font-size:15px;cursor:pointer}
+      @media print{.no-print{display:none!important}}
+    </style></head><body>
+    <div class="head"><h1>🪔 Diwali 2026 — Hudson South Asians Club</h1>
+      <p>Present these QR codes at the door · No alcohol permitted at the venue</p></div>
+    ${cards}
+    <p class="note">Complete your ${money(b.total)} payment via Zelle/Venmo (Friends &amp; Family) to activate these tickets.</p>
+    <button class="btn no-print" onclick="window.print()">Print / Save as PDF</button>
+    <p class="note no-print">On a phone: tap the button above, or use your browser's Share → Print / Save to PDF. You can also simply screenshot this page.</p>
+    <script>window.addEventListener('load',function(){setTimeout(function(){try{window.print();}catch(e){}},400);});<\/script>
+    </body></html>`;
+  const w=window.open('','_blank');
+  if(!w){ alert('Please allow pop-ups for this site and tap Print again — or use your browser menu → Print / Save as PDF.'); return; }
+  w.document.open(); w.document.write(doc); w.document.close();
 }
 
 function renderPayment(b){
@@ -799,6 +882,7 @@ function applySalesStatus(){
 applySalesStatus();
 if(!salesClosed){ initPrices(); renderSummary(); }
 checkDeepLink();
+showWelcomeBack();
 </script>
 </body>
 </html>
